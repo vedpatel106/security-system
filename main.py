@@ -153,7 +153,7 @@ class RegistrationWindow:
         username = self.username_entry.get()
         lines = []
 
-        with open("users.txt", "r") as file:
+        with open("users.csv", "r") as file:
             for line in file:
                 user_info = line.strip().split(",")
                 if len(user_info) == 3:
@@ -161,7 +161,7 @@ class RegistrationWindow:
                     if username != saved_username:
                         lines.append(line)
 
-        with open("users.txt", "w") as file:
+        with open("users.csv", "w") as file:
             file.writelines(lines)
 
         messagebox.showinfo("User Deleted", f"The user '{username}' has been deleted")
