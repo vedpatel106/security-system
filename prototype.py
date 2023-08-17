@@ -6,8 +6,14 @@ import bcrypt
 import time
 import datetime
 from PIL import Image, ImageTk
+import re
+import os
+from tkinter import scrolledtext
+import win32print
+import win32con
+import pywintypes
 
-# Define the COLOUR scheme for the dark theme
+# Define the colour scheme for the dark theme
 BG_COLOUR = "#424242"
 FG_COLOUR = "#F1F2F6"
 TITLE_COLOUR = "#FB3640"
@@ -34,6 +40,12 @@ class SecuritySystem:
         self.fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         self.out = None
 
+        self.activity_folder = "Activity"
+        if not os.path.exists(self.activity_folder):
+            os.mkdir(self.activity_folder)
+        
+        self.cleanup_activity_folder()
+
     def start_security_system(self):
         self.security_system_active = True
         print("Security System is ON")
@@ -53,7 +65,9 @@ class SecuritySystem:
                 if not self.detection:
                     self.detection = True
                     current_time = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
-                    self.out = cv2.VideoWriter(f"{current_time}.mp4", self.fourcc, 24, self.frame_size)
+                    video_filename = os.path.join(self.activity_folder, f"{current_time}.mp4")
+                    self.out = cv2.VideoWriter(video_filename, self.fourcc, 24, self.frame_size)
+                    self.write_activity_text_file(current_time)
                     print("Started Recording!")
             elif self.detection:
                 if self.timer_started:
@@ -79,6 +93,23 @@ class SecuritySystem:
         if self.out is not None:
             self.out.release()
         cv2.destroyAllWindows()
+    
+    def write_activity_text_file(self, current_time):
+        text_filename = os.path.join(self.activity_folder, f"{current_time}.txt")
+        with open(text_filename, "w") as file:
+            file.write("Activity Details:\n")
+            file.write(f"Start Time: {current_time}\n")
+    
+    def cleanup_activity_folder(self):
+        max_activity_age_days = 60  # Age threshold of recordings
+        now = time.time()
+        for filename in os.listdir(self.activity_folder):
+            file_path = os.path.join(self.activity_folder, filename)
+            if os.path.isfile(file_path):
+                file_age_days = (now - os.path.getctime(file_path)) / (60 * 60 * 24)
+                if file_age_days > max_activity_age_days:
+                    os.remove(file_path)
+                    print(f"Removed old file: {filename}")
 
 class App:
     def __init__(self, root):
@@ -86,6 +117,10 @@ class App:
         self.root.title("Security App")
         self.root.geometry("800x600")
         self.root.config(bg=BG_COLOUR)
+
+        style = ttk.Style()
+        style.configure("TButton", background=BUTTON_BG_COLOUR, foreground=BUTTON_FG_COLOUR, font=(MAIN_FONT, 10), relief="flat", borderwidth=0)
+        style.map("TButton", background=[("active", "#555555")], foreground=[("active", BUTTON_BG_COLOUR)])
 
         self.security_system = SecuritySystem(self.root)
         self.security_system.check_security()
@@ -205,13 +240,28 @@ class App:
 
         self.security_button_text = StringVar()
         self.security_button_text.set("Turn On Security System")
-        self.security_button = ttk.Button(self.current_screen, textvariable=self.security_button_text, command=self.toggle_security_system, style="TButton", width=20, cursor="hand2")
+        self.security_button = ttk.Button(self.current_screen, textvariable=self.security_button_text, command=self.toggle_security_system, style="TButton", width=25, cursor="hand2")
         self.security_button.pack(pady=5)
 
         self.video_feed_label = Label(self.current_screen, bg=BG_COLOUR)
         self.video_feed_label.pack()
 
         self.update_video_feed(self.video_feed_label)
+
+    def is_valid_email(self, email):
+        # Use regular expression to validate email format
+        email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
+        return email_pattern.match(email)
+    
+    def is_strong_password(self, password):
+        # Use regular expressions to check for strong password criteria
+        length_check = len(password) >= 8
+        uppercase_check = re.search(r"[A-Z]", password)
+        lowercase_check = re.search(r"[a-z]", password)
+        digit_check = re.search(r"\d", password)
+        special_char_check = re.search(r"[\W_]", password)
+        
+        return length_check and uppercase_check and lowercase_check and digit_check and special_char_check
 
     def update_video_feed(self, label):
         _, frame = self.security_system.cap.read()
@@ -236,30 +286,207 @@ class App:
 
         self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
         self.back_button.pack(pady=5)
+    
+    def check_and_create_description_files(self):
+        activity_files = os.listdir(self.security_system.activity_folder)
+
+        for file in activity_files:
+            if file.endswith(".mp4"):
+                recording_time = file[:-4]  # Remove ".mp4" extension
+                recording_text_file = f"{recording_time}.txt"
+                text_file_path = os.path.join(self.security_system.activity_folder, recording_text_file)
+
+                if not os.path.exists(text_file_path):
+                    # Create and populate the text description file
+                    with open(text_file_path, "w") as text_file:
+                        text_file.write("Description:")
 
     def open_activity_log(self):
+        if self.current_screen:
+            self.current_screen.destroy()
+        
+        self.create_activity_log_screen()
+
+    def create_activity_log_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
 
         self.current_screen = Frame(self.root, bg=BG_COLOUR)
         self.current_screen.pack(fill=BOTH, expand=True)
 
-        Label(self.current_screen, text="This is the Activity Log window", font=(MAIN_FONT, 14), bg=BG_COLOUR, fg=FG_COLOUR).pack(pady=30)
+        Label(self.current_screen, text="Activity Log", font=(MAIN_FONT, 20), bg=BG_COLOUR, fg=TITLE_COLOUR).pack(pady=10)
 
-        self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
-        self.back_button.pack(pady=5)
+        self.check_and_create_description_files()  # Check and create text description files
+
+        activity_files = os.listdir(self.security_system.activity_folder)
+
+        scrollbar = Scrollbar(self.current_screen)
+        scrollbar.pack(side=RIGHT, fill=Y)
+
+        canvas = Canvas(self.current_screen, yscrollcommand=scrollbar.set, bg=BG_COLOUR)
+        canvas.pack(fill=BOTH, expand=True)
+
+        scrollbar.config(command=canvas.yview)
+
+        inner_frame = Frame(canvas, bg=BG_COLOUR)
+        canvas.create_window((0, 0), window=inner_frame, anchor='nw')
+
+        inner_frame.bind("<Configure>", lambda event, canvas=canvas: self.on_frame_configure(canvas))
+
+        for file in activity_files:
+            if file.endswith(".mp4"):
+                recording_time = file[:-4]  # Remove ".mp4" extension
+                recording_text_file = f"{recording_time}.txt"
+                text_file_path = os.path.join(self.security_system.activity_folder, recording_text_file)
+
+                if os.path.exists(text_file_path):
+                    recording_description, timestamp, metadata = self.read_description_file(text_file_path)
+
+                    recording_label = Label(inner_frame, text=f"Recording: {recording_time}", font=(MAIN_FONT, 12), bg=BG_COLOUR, fg=FG_COLOUR)
+                    recording_label.pack(padx=10, pady=5, anchor=W)
+
+                    description_label = Label(inner_frame, text=f"Description: {recording_description}", bg=BG_COLOUR, fg=FG_COLOUR)
+                    description_label.pack(padx=10, pady=2, anchor=W)
+
+                    timestamp_label = Label(inner_frame, text=f"Timestamp: {timestamp}", bg=BG_COLOUR, fg=FG_COLOUR)
+                    timestamp_label.pack(padx=10, pady=2, anchor=W)
+
+                    metadata_label = Label(inner_frame, text=f"Edited by: {metadata}", bg=BG_COLOUR, fg=FG_COLOUR)
+                    metadata_label.pack(padx=10, pady=2, anchor=W)
+
+                    edit_button = ttk.Button(inner_frame, text="Edit Description", command=lambda path=text_file_path: self.edit_description(path), style="TButton", cursor="hand2")
+                    edit_button.pack(padx=10, pady=2, anchor=W)
+
+        # Add Back button
+        back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
+        back_button.pack(pady=10)
+
+        # Update the scrollregion
+        canvas.update_idletasks()
+        canvas.config(scrollregion=canvas.bbox("all"))
+
+    def on_frame_configure(self, canvas):
+        canvas.config(scrollregion=canvas.bbox("all"))
+
+    def read_description_file(self, text_file_path):
+        recording_description = ""
+        timestamp = ""
+        metadata = ""
+
+        with open(text_file_path, "r") as text_file:
+            lines = text_file.readlines()
+
+            if lines:
+                recording_description = lines[0].strip()
+                if len(lines) >= 2:
+                    timestamp = lines[1].strip()
+                if len(lines) >= 3:
+                    metadata = lines[2].strip()
+
+        return recording_description, timestamp, metadata
+    
+    def edit_description(self, text_file_path):
+        self.edit_description_window = Toplevel(self.root)
+        self.edit_description_window.title("Edit Description")
+        self.edit_description_window.config(bg=BG_COLOUR)  # Set background color of the window
+
+        description_text, timestamp, metadata = self.read_description_file(text_file_path)
+
+        description_label = Label(self.edit_description_window, text="Edit Description:", font=(MAIN_FONT, 14), bg=BG_COLOUR, fg=FG_COLOUR)
+        description_label.pack(pady=10)
+
+        description_entry = Text(self.edit_description_window, wrap=WORD, font=(MAIN_FONT, 12), width=40, height=10, bg=BG_COLOUR, fg=FG_COLOUR)
+        description_entry.insert("1.0", description_text)
+        description_entry.pack(padx=10, pady=5)
+
+        save_button = ttk.Button(self.edit_description_window, text="Save", command=lambda: self.save_description(description_entry.get("1.0", "end-1c"), text_file_path), style="TButton")
+        save_button.pack(pady=10)
+    
+    def save_description(self, description, text_file_path):
+        with open(text_file_path, "w") as file:
+            file.write(description)
+        self.edit_description_window.destroy()
+        self.create_activity_log_screen()  # Refresh the activity log window
+    
+    def update_description(self, description_text, text_file_path):
+        timestamp = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        username = self.username_entry.get()  # Replace this with the actual username
+        metadata = f"{username} ({timestamp})"
+
+        with open(text_file_path, "w") as text_file:
+            text_file.write(f"{description_text}\n")
+            text_file.write(f"Original Timestamp: {timestamp}\n")
+            text_file.write(f"Edited by: {metadata}\n")
 
     def open_print_report(self):
         if self.current_screen:
             self.current_screen.destroy()
 
+        self.create_print_report_screen()
+    
+    def create_print_report_screen(self):
+        if self.current_screen:
+            self.current_screen.destroy()
+
         self.current_screen = Frame(self.root, bg=BG_COLOUR)
         self.current_screen.pack(fill=BOTH, expand=True)
 
-        Label(self.current_screen, text="This is the Print Report window", font=(MAIN_FONT, 14), bg=BG_COLOUR, fg=FG_COLOUR).pack(pady=30)
+        Label(self.current_screen, text="Print Report", font=(MAIN_FONT, 20), bg=BG_COLOUR, fg=TITLE_COLOUR).pack(pady=10)
+
+        activity_files = os.listdir(self.security_system.activity_folder)
+        recording_options = []
+
+        for file in activity_files:
+            if file.endswith(".mp4"):
+                recording_time = file[:-4]  # Remove ".mp4" extension
+                recording_text_file = f"{recording_time}.txt"
+                recording_options.append((recording_text_file, recording_time))
+
+        self.selected_recording = StringVar()
+        self.selected_recording.set(recording_options[0][0])
+
+        recording_label = Label(self.current_screen, text="Select Recording:", font=(MAIN_FONT, 12), bg=BG_COLOUR, fg=FG_COLOUR)
+        recording_label.pack(padx=10, pady=5, anchor=W)
+
+        recording_menu = ttk.OptionMenu(self.current_screen, self.selected_recording, recording_options[0][0], *[option[0] for option in recording_options])
+        recording_menu.pack(fill=X, padx=10, pady=5)
+
+        print_button = ttk.Button(self.current_screen, text="Print", command=self.print_selected_recording, style="TButton", width=15, cursor="hand2")
+        print_button.pack(pady=10)
 
         self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
-        self.back_button.pack(pady=5)
+        self.back_button.pack(pady=10)
+
+    def print_selected_recording(self):
+        selected_recording = self.selected_recording.get()
+        text_file_path = os.path.join(self.security_system.activity_folder, selected_recording)
+
+        try:
+            if os.path.exists(text_file_path):
+                with open(text_file_path, "r") as file:
+                    text_content = file.read()
+
+                    # Print the content to the default printer
+                    printer_name = win32print.GetDefaultPrinter()
+                    if not printer_name:
+                        messagebox.showerror("Printer Error", "No printer found. Please set up a printer.")
+                        return
+
+                    hprinter = win32print.OpenPrinter(printer_name)
+                    try:
+                        printer_info = win32print.GetPrinter(hprinter, 2)
+                        if win32print.StartDocPrinter(hprinter, 1, ("Document", None, "RAW")):
+                            win32print.StartPagePrinter(hprinter)
+                            win32print.WritePrinter(hprinter, text_content.encode())
+                            win32print.EndPagePrinter(hprinter)
+                            win32print.EndDocPrinter(hprinter)
+                    finally:
+                        win32print.ClosePrinter(hprinter)
+            else:
+                messagebox.showerror("Error", "Selected recording not found.")
+        except pywintypes.error as e:
+            error_message = e.args[2]
+            messagebox.showerror("Printer Error", f"An error occurred while accessing the printer: {error_message}")
 
     def toggle_security_system(self):
         if self.security_system.security_system_active:
