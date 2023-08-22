@@ -25,7 +25,9 @@ MAIN_FONT = "Impact"
 BUTTON_RADIUS = 20
 ENTRY_RADIUS = 20
 
+# -------- Security System ---------
 class SecuritySystem:
+    # Defining all preliminary variables
     def __init__(self, root):
         self.root = root
         self.security_system_active = False
@@ -46,47 +48,51 @@ class SecuritySystem:
         
         self.cleanup_activity_folder()
 
+    # Starting Security System
     def start_security_system(self):
         self.security_system_active = True
         print("Security System is ON")
 
+    # Stopping Security System
     def stop_security_system(self):
         self.security_system_active = False
         print("Security System is OFF")
 
+    # Security System Logic
     def check_security(self):
         if self.security_system_active:
             _, frame = self.cap.read()
-            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-            faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
-            bodies = self.body_cascade.detectMultiScale(gray, 1.3, 5)
+            grey = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY) # Converts frame to greyscale to use haarcascades
+            faces = self.face_cascade.detectMultiScale(grey, 1.3, 5) # Face haarcascade
+            bodies = self.body_cascade.detectMultiScale(grey, 1.3, 5) # Body haarcascade
 
-            if len(faces) + len(bodies) > 0:
-                if not self.detection:
-                    self.detection = True
+            if len(faces) + len(bodies) > 0: # If faces or bodies are in the frame
+                if not self.detection: # If not already recording
+                    self.detection = True # Start recording
                     current_time = datetime.datetime.now().strftime("%d-%m-%Y-%H-%M-%S")
                     video_filename = os.path.join(self.activity_folder, f"{current_time}.mp4")
-                    self.out = cv2.VideoWriter(video_filename, self.fourcc, 24, self.frame_size)
-                    self.write_activity_text_file(current_time)
+                    self.out = cv2.VideoWriter(video_filename, self.fourcc, 24, self.frame_size) # Specs for exported videos
+                    self.write_activity_text_file(current_time) # Save timestamp to text file
                     print("Started Recording!")
-            elif self.detection:
-                if self.timer_started:
-                    if time.time() - self.detection_stopped_time >= self.SECONDS_TO_RECORD_AFTER_DETECTION:
-                        self.detection = False
-                        self.timer_started = False
-                        self.out.release()
+            elif self.detection: # If already recording
+                if self.timer_started: # If timer has started
+                    if time.time() - self.detection_stopped_time >= self.SECONDS_TO_RECORD_AFTER_DETECTION: # If time since last body or face in frame has been more than or equal to recording threshold
+                        self.detection = False # Stop recording
+                        self.timer_started = False # Reset variable
+                        self.out.release() # Release resource
                         print('Stop Recording!')
-                else:
-                    self.timer_started = True
+                else: # If timer has not started
+                    self.timer_started = True # Start timer
                     self.detection_stopped_time = time.time()
 
             if self.detection:
-                self.out.write(frame)
+                self.out.write(frame) # Write to file
 
-            cv2.imshow("Camera", frame)
+            cv2.imshow("Camera", frame) # Show original frame view
 
         self.root.after(10, self.check_security)
 
+    # Function to release resources
     def release_camera(self):
         if self.cap is not None:
             self.cap.release()
@@ -94,12 +100,14 @@ class SecuritySystem:
             self.out.release()
         cv2.destroyAllWindows()
     
+    # Writing to text files
     def write_activity_text_file(self, current_time):
-        text_filename = os.path.join(self.activity_folder, f"{current_time}.txt")
+        text_filename = os.path.join(self.activity_folder, f"{current_time}.txt") # Find file
         with open(text_filename, "w") as file:
-            file.write("Activity Details:\n")
-            file.write(f"Start Time: {current_time}\n")
+            file.write("Activity Details:\n") # Populate file
+            file.write(f"Start Time: {current_time}\n") # Populate file
     
+    # Deleting old files
     def cleanup_activity_folder(self):
         max_activity_age_days = 60  # Age threshold of recordings
         now = time.time()
@@ -107,27 +115,32 @@ class SecuritySystem:
             file_path = os.path.join(self.activity_folder, filename)
             if os.path.isfile(file_path):
                 file_age_days = (now - os.path.getctime(file_path)) / (60 * 60 * 24)
-                if file_age_days > max_activity_age_days:
-                    os.remove(file_path)
-                    print(f"Removed old file: {filename}")
+                if file_age_days > max_activity_age_days: # If file age is past threshold
+                    os.remove(file_path) # Delete file
+                    print(f"Removed old file: {filename}") # Notify that file has been deleted
 
+# -------- App --------
 class App:
+    # Defining preliminary variables
     def __init__(self, root):
         self.root = root
         self.root.title("Security App")
         self.root.geometry("800x600")
         self.root.config(bg=BG_COLOUR)
 
+        # Set style
         style = ttk.Style()
         style.configure("TButton", background=BUTTON_BG_COLOUR, foreground=BUTTON_FG_COLOUR, font=(MAIN_FONT, 10), relief="flat", borderwidth=0)
         style.map("TButton", background=[("active", "#555555")], foreground=[("active", BUTTON_BG_COLOUR)])
 
         self.security_system = SecuritySystem(self.root)
         self.security_system.check_security()
+        self.current_user = None  # Stores the currently logged-in user
 
         self.current_screen = None
         self.create_login_screen()
 
+    # Creating Login Screen
     def create_login_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -156,6 +169,7 @@ class App:
         self.register_button = ttk.Button(self.current_screen, text="Register", command=self.create_registration_screen, style="TButton", width=15, cursor="hand2")
         self.register_button.pack()
 
+    # Creating Registration Screen
     def create_registration_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -202,6 +216,7 @@ class App:
         self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_login_screen, style="TButton", width=15, cursor="hand2")
         self.back_button.pack(pady=5)
 
+    # Login Logic
     def login(self):
         username = self.username_entry.get()
         password = self.password_entry.get()
@@ -211,11 +226,20 @@ class App:
                 email, saved_username, saved_password_hash = line.strip().split(",")
                 if username == saved_username and bcrypt.checkpw(password.encode(), saved_password_hash.encode()):
                     messagebox.showinfo("Login Successful", f"Welcome, {username}!")
+                    self.current_user = username  # Store the current user
                     self.create_main_menu_screen()
                     return
 
         messagebox.showerror("Login Failed", "Invalid username or password")
 
+    # Clear registration entry fields
+    def clear_fields(self):
+        self.email_entry.delete(0, END)
+        self.username_entry.delete(0, END)
+        self.password_entry.delete(0, END)
+        self.confirm_password_entry.delete(0, END)
+
+    # Creating Main Menu Screen
     def create_main_menu_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -248,13 +272,13 @@ class App:
 
         self.update_video_feed(self.video_feed_label)
 
+    # Checking for valid email address
     def is_valid_email(self, email):
-        # Use regular expression to validate email format
         email_pattern = re.compile(r"^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$")
         return email_pattern.match(email)
     
+    # Using regular expressions to check for strong password criteria
     def is_strong_password(self, password):
-        # Use regular expressions to check for strong password criteria
         length_check = len(password) >= 8
         uppercase_check = re.search(r"[A-Z]", password)
         lowercase_check = re.search(r"[a-z]", password)
@@ -263,6 +287,7 @@ class App:
         
         return length_check and uppercase_check and lowercase_check and digit_check and special_char_check
 
+    # Updating the live video feed
     def update_video_feed(self, label):
         _, frame = self.security_system.cap.read()
         frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -272,6 +297,7 @@ class App:
         label.configure(image=photo)
         label.after(10, lambda: self.update_video_feed(label))
 
+    # Open Live View
     def open_live_view(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -287,26 +313,29 @@ class App:
         self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
         self.back_button.pack(pady=5)
     
+    # Checking and Creating Description Files
     def check_and_create_description_files(self):
-        activity_files = os.listdir(self.security_system.activity_folder)
+        activity_files = os.listdir(self.security_system.activity_folder) # Directory
 
-        for file in activity_files:
-            if file.endswith(".mp4"):
+        for file in activity_files: # Iterating through files
+            if file.endswith(".mp4"): # If ".mp4" video file
                 recording_time = file[:-4]  # Remove ".mp4" extension
                 recording_text_file = f"{recording_time}.txt"
                 text_file_path = os.path.join(self.security_system.activity_folder, recording_text_file)
 
-                if not os.path.exists(text_file_path):
+                if not os.path.exists(text_file_path): # If path does not exist
                     # Create and populate the text description file
                     with open(text_file_path, "w") as text_file:
                         text_file.write("Description:")
 
+    # Open Activity Log Screen
     def open_activity_log(self):
         if self.current_screen:
             self.current_screen.destroy()
         
         self.create_activity_log_screen()
 
+    # Creating Activity Log Screen (actual content)
     def create_activity_log_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -316,10 +345,11 @@ class App:
 
         Label(self.current_screen, text="Activity Log", font=(MAIN_FONT, 20), bg=BG_COLOUR, fg=TITLE_COLOUR).pack(pady=10)
 
-        self.check_and_create_description_files()  # Check and create text description files
+        self.check_and_create_description_files() # Check and create text description files
 
         activity_files = os.listdir(self.security_system.activity_folder)
 
+        # Scrollbar
         scrollbar = Scrollbar(self.current_screen)
         scrollbar.pack(side=RIGHT, fill=Y)
 
@@ -333,11 +363,11 @@ class App:
 
         inner_frame.bind("<Configure>", lambda event, canvas=canvas: self.on_frame_configure(canvas))
 
-        for file in activity_files:
-            if file.endswith(".mp4"):
+        for file in activity_files: # Iterate through all files in folder
+            if file.endswith(".mp4"): # If ".mp4" video file
                 recording_time = file[:-4]  # Remove ".mp4" extension
-                recording_text_file = f"{recording_time}.txt"
-                text_file_path = os.path.join(self.security_system.activity_folder, recording_text_file)
+                recording_text_file = f"{recording_time}.txt" # Select file
+                text_file_path = os.path.join(self.security_system.activity_folder, recording_text_file) # Select path
 
                 if os.path.exists(text_file_path):
                     recording_description, timestamp, metadata = self.read_description_file(text_file_path)
@@ -357,17 +387,18 @@ class App:
                     edit_button = ttk.Button(inner_frame, text="Edit Description", command=lambda path=text_file_path: self.edit_description(path), style="TButton", cursor="hand2")
                     edit_button.pack(padx=10, pady=2, anchor=W)
 
-        # Add Back button
+        # Back Button
         back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
         back_button.pack(pady=10)
 
-        # Update the scrollregion
+        # Update Scrollregion
         canvas.update_idletasks()
         canvas.config(scrollregion=canvas.bbox("all"))
 
     def on_frame_configure(self, canvas):
         canvas.config(scrollregion=canvas.bbox("all"))
 
+    # Reading Description Files
     def read_description_file(self, text_file_path):
         recording_description = ""
         timestamp = ""
@@ -385,6 +416,7 @@ class App:
 
         return recording_description, timestamp, metadata
     
+    # Editing Description Files
     def edit_description(self, text_file_path):
         self.edit_description_window = Toplevel(self.root)
         self.edit_description_window.title("Edit Description")
@@ -402,28 +434,53 @@ class App:
         save_button = ttk.Button(self.edit_description_window, text="Save", command=lambda: self.save_description(description_entry.get("1.0", "end-1c"), text_file_path), style="TButton")
         save_button.pack(pady=10)
     
+    # Saving Edited Descriptions
     def save_description(self, description, text_file_path):
         with open(text_file_path, "w") as file:
             file.write(description)
         self.edit_description_window.destroy()
-        self.create_activity_log_screen()  # Refresh the activity log window
+        self.create_activity_log_screen()  # Refresh Activity Log Window
     
+    # Updating Description Preview
     def update_description(self, description_text, text_file_path):
-        timestamp = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        username = self.username_entry.get()  # Replace this with the actual username
-        metadata = f"{username} ({timestamp})"
-
+        current_timestamp = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
+        edited_by = self.current_user
+    
+        # Read the existing content of the file
+        with open(text_file_path, "r") as text_file:
+            lines = text_file.readlines()
+    
+        # Construct the new metadata with updated information
+        new_metadata = f"Edited by: {edited_by} on {current_timestamp}\n"
+    
+        # Find the line number where the metadata is located
+        metadata_line_number = None
+        for i, line in enumerate(lines):
+            if line.strip().startswith("Edited by:"):
+                metadata_line_number = i
+                break
+            
+        # If metadata line is found, update it, otherwise add it to the end
+        if metadata_line_number is not None:
+            lines[metadata_line_number] = new_metadata
+        else:
+            lines.append(new_metadata)
+    
+        # Write the modified content back to the file
         with open(text_file_path, "w") as text_file:
-            text_file.write(f"{description_text}\n")
-            text_file.write(f"Original Timestamp: {timestamp}\n")
-            text_file.write(f"Edited by: {metadata}\n")
+            text_file.writelines(lines)
+    
+        # Update the activity log screen after editing
+        self.create_activity_log_screen()
 
+    # Open Print Report
     def open_print_report(self):
         if self.current_screen:
             self.current_screen.destroy()
 
         self.create_print_report_screen()
     
+    # Create Print Report Screen
     def create_print_report_screen(self):
         if self.current_screen:
             self.current_screen.destroy()
@@ -436,6 +493,7 @@ class App:
         activity_files = os.listdir(self.security_system.activity_folder)
         recording_options = []
 
+        # Iterate through ".mp4" video files in the selected path
         for file in activity_files:
             if file.endswith(".mp4"):
                 recording_time = file[:-4]  # Remove ".mp4" extension
@@ -445,18 +503,22 @@ class App:
         self.selected_recording = StringVar()
         self.selected_recording.set(recording_options[0][0])
 
+        # Title
         recording_label = Label(self.current_screen, text="Select Recording:", font=(MAIN_FONT, 12), bg=BG_COLOUR, fg=FG_COLOUR)
         recording_label.pack(padx=10, pady=5, anchor=W)
 
         recording_menu = ttk.OptionMenu(self.current_screen, self.selected_recording, recording_options[0][0], *[option[0] for option in recording_options])
         recording_menu.pack(fill=X, padx=10, pady=5)
 
+        # Print Button
         print_button = ttk.Button(self.current_screen, text="Print", command=self.print_selected_recording, style="TButton", width=15, cursor="hand2")
         print_button.pack(pady=10)
 
+        # Back Button
         self.back_button = ttk.Button(self.current_screen, text="Back", command=self.create_main_menu_screen, style="TButton", width=15, cursor="hand2")
         self.back_button.pack(pady=10)
 
+    # Print Recording Descriptions - Logic
     def print_selected_recording(self):
         selected_recording = self.selected_recording.get()
         text_file_path = os.path.join(self.security_system.activity_folder, selected_recording)
@@ -466,7 +528,7 @@ class App:
                 with open(text_file_path, "r") as file:
                     text_content = file.read()
 
-                    # Print the content to the default printer
+                    # Print content to the default printer
                     printer_name = win32print.GetDefaultPrinter()
                     if not printer_name:
                         messagebox.showerror("Printer Error", "No printer found. Please set up a printer.")
@@ -488,6 +550,7 @@ class App:
             error_message = e.args[2]
             messagebox.showerror("Printer Error", f"An error occurred while accessing the printer: {error_message}")
 
+    # Toggling Security System
     def toggle_security_system(self):
         if self.security_system.security_system_active:
             self.security_system.stop_security_system()
@@ -496,6 +559,7 @@ class App:
             self.security_system.start_security_system()
             self.security_button_text.set("Turn Off Security System")
 
+    # Registration Logic
     def register(self):
         email = self.email_entry.get()
         username = self.username_entry.get()
@@ -518,20 +582,24 @@ class App:
             messagebox.showinfo("Registration Successful", "You have been registered successfully")
             self.clear_fields()
 
+    # Confirm User Deletion
     def delete_user_confirm(self):
         response = messagebox.askyesno("Confirm Deletion", "Are you sure you want to delete this user?")
         if response:
             self.delete_user()
 
+    # Confirm Program Exit
     def exit_program(self):
         self.security_system.release_camera()
         self.root.destroy()
 
+# -------- Main Loop --------
 if __name__ == "__main__":
     root = Tk()
     root.config(bg=BG_COLOUR)
     app = App(root)
 
+    # Confirm program exit and releasing resources
     def on_closing():
         if messagebox.askokcancel("Quit", "Do you want to quit?"):
             if app.security_system.security_system_active:

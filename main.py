@@ -230,6 +230,13 @@ class App:
 
         messagebox.showerror("Login Failed", "Invalid username or password")
 
+    # Clear registration entry fields
+    def clear_fields(self):
+        self.email_entry.delete(0, END)
+        self.username_entry.delete(0, END)
+        self.password_entry.delete(0, END)
+        self.confirm_password_entry.delete(0, END)
+
     # Creating Main Menu Screen
     def create_main_menu_screen(self):
         if self.current_screen:
