@@ -217,14 +217,14 @@ class App:
 
     # Login Logic
     def login(self):
-        username = self.username_entry.get()
+        self.username = self.username_entry.get()
         password = self.password_entry.get()
 
         with open("users.csv", "r") as file:
             for line in file:
                 email, saved_username, saved_password_hash = line.strip().split(",")
-                if username == saved_username and bcrypt.checkpw(password.encode(), saved_password_hash.encode()):
-                    messagebox.showinfo("Login Successful", f"Welcome, {username}!")
+                if self.username == saved_username and bcrypt.checkpw(password.encode(), saved_password_hash.encode()):
+                    messagebox.showinfo("Login Successful", f"Welcome, {self.username}!")
                     self.create_main_menu_screen()
                     return
 
@@ -376,10 +376,10 @@ class App:
                     description_label = Label(inner_frame, text=f"Description: {recording_description}", bg=BG_COLOUR, fg=FG_COLOUR)
                     description_label.pack(padx=10, pady=2, anchor=W)
 
-                    timestamp_label = Label(inner_frame, text=f"Timestamp: {timestamp}", bg=BG_COLOUR, fg=FG_COLOUR)
+                    timestamp_label = Label(inner_frame, text=f"{timestamp}", bg=BG_COLOUR, fg=FG_COLOUR)
                     timestamp_label.pack(padx=10, pady=2, anchor=W)
 
-                    metadata_label = Label(inner_frame, text=f"Edited by: {metadata}", bg=BG_COLOUR, fg=FG_COLOUR)
+                    metadata_label = Label(inner_frame, text=f"{metadata}", bg=BG_COLOUR, fg=FG_COLOUR)
                     metadata_label.pack(padx=10, pady=2, anchor=W)
 
                     edit_button = ttk.Button(inner_frame, text="Edit Description", command=lambda path=text_file_path: self.edit_description(path), style="TButton", cursor="hand2")
@@ -418,7 +418,7 @@ class App:
     def edit_description(self, text_file_path):
         self.edit_description_window = Toplevel(self.root)
         self.edit_description_window.title("Edit Description")
-        self.edit_description_window.config(bg=BG_COLOUR)  # Set background color of the window
+        self.edit_description_window.config(bg=BG_COLOUR)
 
         description_text, timestamp, metadata = self.read_description_file(text_file_path)
 
@@ -429,20 +429,20 @@ class App:
         description_entry.insert("1.0", description_text)
         description_entry.pack(padx=10, pady=5)
 
-        save_button = ttk.Button(self.edit_description_window, text="Save", command=lambda: self.save_description(description_entry.get("1.0", "end-1c"), text_file_path), style="TButton")
+        save_button = ttk.Button(self.edit_description_window, text="Save", command=lambda: self.save_description(description_entry.get("1.0", "end-1c"), text_file_path, description_entry), style="TButton")
         save_button.pack(pady=10)
-    
-    # Saving Edited Descriptions
-    def save_description(self, description, text_file_path):
-        with open(text_file_path, "w") as file:
-            file.write(description)
+
+    def save_description(self, description_text, text_file_path, entry_widget):
+        self.update_description(description_text, text_file_path)
+        entry_widget.destroy()  # Destroy the entry widget
         self.edit_description_window.destroy()
         self.create_activity_log_screen()  # Refresh Activity Log Window
+
     
     # Updating Description Preview
     def update_description(self, description_text, text_file_path):
         timestamp = datetime.datetime.now().strftime("%d-%m-%Y %H:%M:%S")
-        username = self.username_entry.get()  # REPLACE WITH ACTUAL USERNAME
+        username = self.username  # You can replace this with the actual username if needed
         metadata = f"{username} ({timestamp})"
 
         with open(text_file_path, "w") as text_file:
